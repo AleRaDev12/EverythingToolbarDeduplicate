@@ -174,6 +174,7 @@ namespace EverythingToolbar.Helpers
 
             if (hr == HResult.Ok) return hBitmap;
 
+            // *-*
             throw new COMException($"Error while extracting thumbnail for {fileName}", Marshal.GetExceptionForHR((int)hr));
         }
     }

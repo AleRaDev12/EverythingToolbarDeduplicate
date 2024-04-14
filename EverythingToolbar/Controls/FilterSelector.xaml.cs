@@ -1,4 +1,6 @@
-﻿using System.ComponentModel;
+﻿using System;
+using System.ComponentModel;
+using System.Windows;
 using System.Windows.Controls;
 using EverythingToolbar.Data;
 using EverythingToolbar.Helpers;
@@ -48,6 +50,19 @@ namespace EverythingToolbar.Controls
                 return;
 
             EverythingSearch.Instance.CurrentFilter = ComboBox.SelectedItem as Filter;
+        }
+
+        private void OnSearchButtonClick(object sender, RoutedEventArgs e)
+        {
+            string inputText = InputTextBox.Text;  // Получаем текст из TextBox
+            PerformSearch(inputText);              // Вызываем функцию поиска с этим текстом
+        }
+
+        private async void PerformSearch(string searchText)
+        {
+            // await EverythingSearch.Instance.Test1(searchText);
+            // EverythingSearch.Instance.Search = searchText;
+            // EverythingSearch.Instance.QueryBatch(false);
         }
     }
 }

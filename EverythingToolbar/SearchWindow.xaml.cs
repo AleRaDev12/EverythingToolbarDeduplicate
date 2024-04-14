@@ -97,20 +97,20 @@ namespace EverythingToolbar
             if (Visibility != Visibility.Visible)
                 return;
 
-            Hiding?.Invoke(this, EventArgs.Empty);
+            // Hiding?.Invoke(this, EventArgs.Empty);
         }
 
         private void OnHidden(object sender, EventArgs e)
         {
             if (Height != Settings.Default.popupSize.Height || Width != Settings.Default.popupSize.Width)
                 Settings.Default.popupSize = new Size(Width, Height);
-            
+
             // Push outside of screens to prevent flickering when showing
             BeginAnimation(TopProperty, new DoubleAnimation { To = 100000, Duration = TimeSpan.Zero });
             BeginAnimation(LeftProperty, new DoubleAnimation { To = 100000, Duration = TimeSpan.Zero });
 
             base.Hide();
-            
+
             EverythingSearch.Instance.Reset();
         }
 
@@ -141,7 +141,7 @@ namespace EverythingToolbar
         {
             Width = width;
             Height = height;
-            
+
             var vertical = taskbarEdge == Edge.Left || taskbarEdge == Edge.Right;
             var animation = new DoubleAnimation
             {
@@ -155,7 +155,7 @@ namespace EverythingToolbar
                 else
                     AnimateShowWin10(left, top, width, height, taskbarEdge);
             };
-            
+
             BeginAnimation(vertical ? TopProperty : LeftProperty, animation);
         }
 

@@ -52,6 +52,13 @@
                 <MenuItem Header="{x:Static properties:Resources.ContextMenuOpenWinContext}"
                           Click="ShowFileWindowsContextMenu"
                           Icon="&#xE712;" />
+                <Separator />
+                <MenuItem Header="{x:Static properties:Resources.ContextMenuCheckDuplicatesByFileNameAndSize}"
+                          Click="CheckDuplicatesByNameAndSize" />
+                <MenuItem Header="{x:Static properties:Resources.ContextMenuCheckDuplicatesByExtensionAndSize}"
+                          Click="CheckDuplicatesByExtensionAdSize" />
+                <MenuItem Header="{x:Static properties:Resources.ContextMenuCheckDuplicatesInFolder}"
+                          Click="CheckFolderForDuplicates" />
             </ContextMenu>
 
         </ResourceDictionary>

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
+using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -12,6 +14,17 @@ using EverythingToolbar.Behaviors;
 using EverythingToolbar.Data;
 using EverythingToolbar.Helpers;
 using EverythingToolbar.Properties;
+using Binding = System.Windows.Data.Binding;
+using ContextMenu = System.Windows.Controls.ContextMenu;
+using DataFormats = System.Windows.DataFormats;
+using DataObject = System.Windows.DataObject;
+using DragDropEffects = System.Windows.DragDropEffects;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using ListViewItem = System.Windows.Controls.ListViewItem;
+using MenuItem = System.Windows.Controls.MenuItem;
+using MessageBox = System.Windows.MessageBox;
+using MouseEventArgs = System.Windows.Input.MouseEventArgs;
+using MouseEventHandler = System.Windows.Input.MouseEventHandler;
 
 namespace EverythingToolbar.Controls
 {
@@ -158,7 +171,7 @@ namespace EverythingToolbar.Controls
         {
             if (e.VerticalChange <= 0)
                 return;
-            
+
             if (e.VerticalOffset > e.ExtentHeight - 2 * e.ViewportHeight)
             {
                 EverythingSearch.Instance.QueryBatch(append: true);
@@ -367,7 +380,7 @@ namespace EverythingToolbar.Controls
         {
             if (SearchResultsListView.SelectedItem == null)
                 return;
-            
+
             var searchResult = SearchResultsListView.SelectedItem as SearchResult;
             var command = (sender as MenuItem).Tag?.ToString() ?? "";
             Rules.HandleRule(searchResult, command);
@@ -415,6 +428,62 @@ namespace EverythingToolbar.Controls
             var selectedItem = (ListViewItem)SearchResultsListView.ItemContainerGenerator.ContainerFromItem(SelectedItem);
             if (selectedItem != null)
                 Keyboard.Focus(selectedItem);
+        }
+
+        private void CheckDuplicatesByNameAndSize(object sender, RoutedEventArgs e)
+        {
+            if (SelectedItem == null)
+                return;
+
+            // Формирование запроса для поиска дубликатов
+            var filePathWithFolderAndFileName = SelectedItem.FullPathAndFileName;
+            var fileName = SelectedItem.FileName;
+            var fileSizeInBytes = SelectedItem.FileSize;
+
+            // Создание строки поиска
+            var searchQuery = $"!{filePathWithFolderAndFileName} {fileName} size:{fileSizeInBytes}";
+
+            // Запуск поиска в Everything
+            EverythingSearch.Instance.SearchForFile(searchQuery);
+        }
+
+        private void CheckDuplicatesByExtensionAdSize(object sender, RoutedEventArgs e)
+        {
+            if (SelectedItem == null)
+                return;
+
+            // Получение расширения файла и размера
+            var filePathWithFolderAndFileName = SelectedItem.FullPathAndFileName;
+            var fileExtension = Path.GetExtension(SelectedItem.FullPathAndFileName);
+            var fileSizeInBytes = SelectedItem.FileSize;
+
+            // Создание строки поиска для дубликатов по расширению и размеру
+            var searchQuery = $"!{filePathWithFolderAndFileName} {fileExtension} size:{fileSizeInBytes}";
+
+            // Запуск поиска в Everything
+            EverythingSearch.Instance.SearchForFile(searchQuery);
+        }
+
+        private async void CheckFolderForDuplicates(object sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("Start CheckFolderForDuplicates");
+            MessageBox.Show("Start CheckFolderForDuplicates");
+
+            if (SelectedItem == null || !Directory.Exists(SelectedItem.FullPathAndFileName))
+                return;
+
+            if (SelectedItem.IsFile)
+            {
+                MessageBox.Show("file");
+                return;
+            }
+
+            // Формирование запроса для поиска всех файлов в папке
+            var folderPath = SelectedItem.FullPathAndFileName;
+
+
+            // Запуск поиска в Everything
+            await EverythingSearch.Instance.QueryEverythingForDuplicates(folderPath);
         }
     }
 }
