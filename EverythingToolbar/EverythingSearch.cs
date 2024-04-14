@@ -424,15 +424,44 @@ namespace EverythingToolbar
         {
             Debug.WriteLine("Start QueryEverythingForDuplicates");
 
+            var duplicates = new List<string>();
+
+            var paths = await GetFilesAndExtensions(folderPath);
+
+            foreach (var (fullPathAndFilename, fileSize) in paths)
+            {
+                var fileExtension = Path.GetExtension(fullPathAndFilename.ToString());
+
+                var searchQuery = $"!\"{fullPathAndFilename}\" {fileExtension} size:{fileSize}";
+                var resultsNum = await GetCount(searchQuery);
+                // MessageBox.Show("Qeury: " + searchQuery + "\n" + "resultsNum: " + resultsNum);
+
+            if (resultsNum > 0)
+                {
+                    duplicates.Add(fullPathAndFilename.ToString());
+                }
+            }
+
+            var res = "";
+
+            Debug.WriteLine("*-* Files:");
+            // Вывод списка не уникальных файлов
+            foreach (var file in duplicates)
+            {
+                Debug.WriteLine("*-* file:" + file); // Замените на любой другой метод вывода
+                res += file + "\n";
+            }
+
+            MessageBox.Show(res);
+        }
+
+        private async Task<List<Tuple<StringBuilder, long>>> GetFilesAndExtensions(string folderPath)
+        {
             const uint flags = EVERYTHING_FULL_PATH_AND_FILE_NAME | EVERYTHING_HIGHLIGHTED_PATH |
                                EVERYTHING_HIGHLIGHTED_FILE_NAME | EVERYTHING_REQUEST_SIZE |
                                EVERYTHING_REQUEST_DATE_MODIFIED;
 
-            var duplicates = new List<string>();
-
             var search = folderPath;
-            // var search = "C:\\Aleradev\\Develop\\Self\\files-sync\\mock-files\\result.txt";
-
 
             _logger.Debug("Searching: " + search);
 
@@ -450,7 +479,7 @@ namespace EverythingToolbar
             if (!Everything_QueryW(true))
             {
                 HandleError((ErrorCode)Everything_GetLastError());
-                return;
+                return null;
             }
 
             var batchResultsCount = Everything_GetNumResults();
@@ -463,10 +492,11 @@ namespace EverythingToolbar
             if (batchResultsCount == 0)
             {
                 Debug.WriteLine("*-* No files found");
-                return;
+                System.Windows.MessageBox.Show("batchResultsCount = " + batchResultsCount);
+                return null;
             }
 
-            List<Tuple<StringBuilder, long>> paths = new List<Tuple<StringBuilder, long>>();
+            var results = new List<Tuple<StringBuilder, long>>();
             for (uint i = 0; i < batchResultsCount; i++)
             {
                 Debug.WriteLine("*-* i:" + i);
@@ -487,81 +517,10 @@ namespace EverythingToolbar
                 Everything_GetResultSize(i, out var fileSize);
                 Everything_GetResultDateModified(i, out var dateModified);
 
-                paths.Add(new Tuple<StringBuilder, long>(fullPathAndFilename, fileSize));
+                results.Add(new Tuple<StringBuilder, long>(fullPathAndFilename, fileSize));
             }
 
-
-            foreach (var path in paths)
-            {
-                var fullPathAndFilename = path.Item1;
-                var fileSize = path.Item2;
-                var fileExtension = Path.GetExtension(fullPathAndFilename.ToString());
-
-                var searchQuery = $"!\"{fullPathAndFilename}\" {fileExtension} size:{fileSize}";
-                var resultsNum = await GetCount(searchQuery);
-                MessageBox.Show("Qeury: " + searchQuery + "\n" + "resultsNum: " + resultsNum);
-
-            if (resultsNum > 0)
-                {
-                    duplicates.Add(fullPathAndFilename.ToString());
-                }
-
-                // // var searchQuery = $"!\"{fullPathAndFilename}\" {fileExtension} size:{fileSize}";
-                // var searchQuery = fullPathAndFilename;
-                // // var searchQuery = $"{fileExtension} size:{fileSize}";
-                // // var searchQuery = $"{fullPathAndFilename} {fileExtension}";
-                // // var searchQuery = $".txt";
-                // // var searchQuery = $"C:\\Aleradev\\Develop\\Self\\files-sync\\mock-files\\3\\resu.txt .txt";
-                // // var searchQuery = $"!\"{fullPathAndFilename.Replace("\\", "\\\\")}\" {fileExtension} size:{fileSize}";
-                //
-                // // var filename = Path.GetFileName(fullPathAndFilename);
-                // // var searchQuery = $"!\"{filename}\" size:{fileSize}";
-                //
-                // // var searchQuery = "C:\\Aleradev\\Develop\\Self\\files-sync\\mock-files\\re";
-                //
-                //
-                // Debug.WriteLine("*-* searchQuery:" + searchQuery);
-                // Everything_SetSearchW(searchQuery.ToString());
-                // Everything_SetRequestFlags(flags);
-                // Everything_SetSort((uint)Settings.Default.sortBy);
-                // Everything_SetMatchCase(Settings.Default.isMatchCase);
-                // Everything_SetMatchPath(Settings.Default.isMatchPath);
-                // Everything_SetMatchWholeWord(Settings.Default.isMatchWholeWord && !Settings.Default.isRegExEnabled);
-                // Everything_SetRegex(Settings.Default.isRegExEnabled);
-                // Everything_SetMax(BATCH_SIZE);
-                // lock (_lock)
-                //     Everything_SetOffset((uint)SearchResults.Count);
-                //
-                // if (!Everything_QueryW(true))
-                // {
-                //     HandleError((ErrorCode)Everything_GetLastError());
-                //     Debug.WriteLine("*-* ERROR");
-                //     return;
-                // }
-                //
-                // var resultsNum = Everything_GetNumResults();
-                // lock (_lock)
-                // {
-                //     TotalResultsNumber = (int)Everything_GetTotResults();
-                //     Debug.WriteLine("*-* TotalResultsNumber:" + TotalResultsNumber);
-                // }
-                //
-                // Debug.WriteLine("*-* resultsNum:" + resultsNum);
-
-            }
-
-
-            var res = "";
-
-            Debug.WriteLine("*-* Files:");
-            // Вывод списка не уникальных файлов
-            foreach (var file in duplicates)
-            {
-                Debug.WriteLine("*-* file:" + file); // Замените на любой другой метод вывода
-                res += file + "\n";
-            }
-
-            MessageBox.Show(res);
+            return results;
         }
 
         private async Task<uint> GetCount(string term)
