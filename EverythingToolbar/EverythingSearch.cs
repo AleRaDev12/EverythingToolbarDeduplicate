@@ -420,7 +420,8 @@ namespace EverythingToolbar
             }
         }
 
-        public async Task QueryEverythingForDuplicates(string folderPath, bool showConfirmation = false)
+        public async Task QueryEverythingForDuplicates(string folderPath, bool showConfirmation = false,
+            bool autoDeleteSameName = false)
         {
             Debug.WriteLine("Start QueryEverythingForDuplicates");
 
@@ -428,7 +429,7 @@ namespace EverythingToolbar
             var uniquePaths = new List<Tuple<string, long>>();
             var deletedPaths = new List<Tuple<string, long>>();
 
-            var allFiles = await GetAllFilesAndSizesByQuery(folderPath);
+            var allFiles = await GetAllFilesAndSizesByQuery("\""+folderPath+"\"");
             if (allFiles == null)
             {
                 MessageBox.Show("ERROR: allFiles == null " + folderPath);
@@ -437,7 +438,9 @@ namespace EverythingToolbar
 
             foreach (var (fullPathAndFilename, fileSize) in allFiles)
             {
-                var fileExtension = Path.GetExtension(fullPathAndFilename.ToString());
+                var fullPathAndFilenameStr = fullPathAndFilename.ToString();
+                var fileName = Path.GetFileName(fullPathAndFilenameStr);
+                var fileExtension = Path.GetExtension(fullPathAndFilenameStr);
 
                 var duplicatesSearchQuery = $"!\"{fullPathAndFilename}\" {fileExtension} size:{fileSize}";
                 var duplicates = await GetAllFilesAndSizesByQuery(duplicatesSearchQuery);
@@ -449,27 +452,54 @@ namespace EverythingToolbar
 
                 if (duplicates.Count > 0)
                 {
-                    if (!showConfirmation) continue;
+                    var sameName = duplicates.Where(d => Path.GetFileName(d.Item1.ToString()) == fileName).ToList();
+                    var differentName = duplicates.Where(d => Path.GetFileName(d.Item1.ToString()) != fileName).ToList();
 
-                    var message =
-                        $"Найдены дубликаты для файла:\n{fullPathAndFilename}\nРазмер: {fileSize}\nДубликаты:\n{string.Join("\n", duplicates)}";
-                    var result = MessageBox.Show(message, "Удалить файл?", MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
+                    var autoDelete = autoDeleteSameName && sameName.Count > 0;
 
-                    if (result == DialogResult.Yes)
+                    if (showConfirmation && !autoDelete)
                     {
-                        File.Delete(fullPathAndFilename.ToString());
-                        Debug.WriteLine($"Файл удален: {fullPathAndFilename}");
-                        deletedPaths.Add(new Tuple<string, long>(fullPathAndFilename.ToString(), fileSize));
+                        var message = $"Найдены дубликаты для файла:\n{fullPathAndFilename}\nРазмер: {fileSize}\n" +
+                                      $"Одинаковые имена:\n{string.Join("\n", sameName.Select(s => s.Item1))}\n" +
+                                      $"Разные имена:\n{string.Join("\n", differentName.Select(d => d.Item1))}";
+                        var result = MessageBox.Show(message, "Удалить файл?", MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Question);
+
+                        if (result == DialogResult.Yes)
+                        {
+                            try
+                            {
+                                var fullPathWithPrefix = @"\\?\" + fullPathAndFilename;
+                                File.Delete(fullPathWithPrefix);
+                                Debug.WriteLine($"Файл удален: {fullPathWithPrefix}");
+                                deletedPaths.Add(new Tuple<string, long>(fullPathWithPrefix, fileSize));
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine("Не удалось удалить файл: " + ex.Message);
+                                MessageBox.Show("ERROR while delete: filepath");
+                                // Возможно стоит здесь добавить логику обработки ошибки.
+                            }
+                        }
+                        else
+                        {
+                            duplicatesPaths.Add(new Tuple<string, long>(fullPathAndFilenameStr, fileSize));
+                        }
+                    }
+                    else if (autoDelete)
+                    {
+                        File.Delete(fullPathAndFilenameStr);
+                        Debug.WriteLine($"Файл автоматически удален: {fullPathAndFilename}");
+                        deletedPaths.Add(new Tuple<string, long>(fullPathAndFilenameStr, fileSize));
                     }
                     else
                     {
-                        duplicatesPaths.Add(new Tuple<string, long>(fullPathAndFilename.ToString(), fileSize));
+                        duplicatesPaths.Add(new Tuple<string, long>(fullPathAndFilenameStr, fileSize));
                     }
                 }
                 else
                 {
-                    uniquePaths.Add(new Tuple<string, long>(fullPathAndFilename.ToString(), fileSize));
+                    uniquePaths.Add(new Tuple<string, long>(fullPathAndFilenameStr, fileSize));
                 }
             }
 
@@ -677,7 +707,7 @@ namespace EverythingToolbar
             ErrorInvalidCall
         }
 
-        private const uint BATCH_SIZE = 100;
+        private const uint BATCH_SIZE = 5000;
 
         private const int EVERYTHING_FULL_PATH_AND_FILE_NAME = 0x00000004;
         private const int EVERYTHING_HIGHLIGHTED_FILE_NAME = 0x00002000;

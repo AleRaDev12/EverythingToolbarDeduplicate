@@ -482,7 +482,7 @@ namespace EverythingToolbar.Controls
 
 
             // Запуск поиска в Everything
-            await EverythingSearch.Instance.QueryEverythingForDuplicates(folderPath, true);
+            await EverythingSearch.Instance.QueryEverythingForDuplicates(folderPath, true, true);
         }
     }
 }

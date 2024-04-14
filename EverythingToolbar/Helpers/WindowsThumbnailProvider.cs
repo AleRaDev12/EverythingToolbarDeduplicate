@@ -108,6 +108,7 @@ namespace EverythingToolbar.Helpers
 
         public static BitmapSource GetThumbnail(string fileName, int width, int height)
         {
+            return null; // disable thumbnails
             string[] ImageExtensions =
             {
                 ".png",
