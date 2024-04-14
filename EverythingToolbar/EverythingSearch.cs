@@ -420,110 +420,170 @@ namespace EverythingToolbar
             }
         }
 
-        public async Task QueryEverythingForDuplicates(string folderPath)
+        public async Task QueryEverythingForDuplicates(string folderPath, bool showConfirmation = false)
         {
             Debug.WriteLine("Start QueryEverythingForDuplicates");
 
-            var duplicates = new List<string>();
+            var duplicatesPaths = new List<Tuple<string, long>>();
+            var uniquePaths = new List<Tuple<string, long>>();
+            var deletedPaths = new List<Tuple<string, long>>();
 
-            var paths = await GetFilesAndExtensions(folderPath);
+            var allFiles = await GetAllFilesAndSizesByQuery(folderPath);
+            if (allFiles == null)
+            {
+                MessageBox.Show("ERROR: allFiles == null " + folderPath);
+                return;
+            }
 
-            foreach (var (fullPathAndFilename, fileSize) in paths)
+            foreach (var (fullPathAndFilename, fileSize) in allFiles)
             {
                 var fileExtension = Path.GetExtension(fullPathAndFilename.ToString());
 
-                var searchQuery = $"!\"{fullPathAndFilename}\" {fileExtension} size:{fileSize}";
-                var resultsNum = await GetCount(searchQuery);
-                // MessageBox.Show("Qeury: " + searchQuery + "\n" + "resultsNum: " + resultsNum);
-
-            if (resultsNum > 0)
+                var duplicatesSearchQuery = $"!\"{fullPathAndFilename}\" {fileExtension} size:{fileSize}";
+                var duplicates = await GetAllFilesAndSizesByQuery(duplicatesSearchQuery);
+                if (duplicates == null)
                 {
-                    duplicates.Add(fullPathAndFilename.ToString());
+                    MessageBox.Show("ERROR: duplicates == null " + duplicatesSearchQuery);
+                    return;
+                }
+
+                if (duplicates.Count > 0)
+                {
+                    if (!showConfirmation) continue;
+
+                    var message =
+                        $"Найдены дубликаты для файла:\n{fullPathAndFilename}\nРазмер: {fileSize}\nДубликаты:\n{string.Join("\n", duplicates)}";
+                    var result = MessageBox.Show(message, "Удалить файл?", MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (result == DialogResult.Yes)
+                    {
+                        File.Delete(fullPathAndFilename.ToString());
+                        Debug.WriteLine($"Файл удален: {fullPathAndFilename}");
+                        deletedPaths.Add(new Tuple<string, long>(fullPathAndFilename.ToString(), fileSize));
+                    }
+                    else
+                    {
+                        duplicatesPaths.Add(new Tuple<string, long>(fullPathAndFilename.ToString(), fileSize));
+                    }
+                }
+                else
+                {
+                    uniquePaths.Add(new Tuple<string, long>(fullPathAndFilename.ToString(), fileSize));
                 }
             }
 
-            var res = "";
-
-            Debug.WriteLine("*-* Files:");
-            // Вывод списка не уникальных файлов
-            foreach (var file in duplicates)
-            {
-                Debug.WriteLine("*-* file:" + file); // Замените на любой другой метод вывода
-                res += file + "\n";
-            }
-
-            MessageBox.Show(res);
+            // Создание файлов с результатами
+            WriteResultsToFile(duplicatesPaths, @"C:\Aleradev\FilesDeduplicate\duplicates.txt");
+            WriteResultsToFile(uniquePaths, @"C:\Aleradev\FilesDeduplicate\unique.txt");
+            WriteResultsToFile(deletedPaths, @"C:\Aleradev\FilesDeduplicate\deleted.txt");
         }
 
-        private async Task<List<Tuple<StringBuilder, long>>> GetFilesAndExtensions(string folderPath)
+        private void WriteResultsToFile(List<Tuple<string, long>> results, string filePath)
         {
-            const uint flags = EVERYTHING_FULL_PATH_AND_FILE_NAME | EVERYTHING_HIGHLIGHTED_PATH |
-                               EVERYTHING_HIGHLIGHTED_FILE_NAME | EVERYTHING_REQUEST_SIZE |
-                               EVERYTHING_REQUEST_DATE_MODIFIED;
-
-            var search = folderPath;
-
-            _logger.Debug("Searching: " + search);
-
-            Everything_SetSearchW(search);
-            Everything_SetRequestFlags(flags);
-            Everything_SetSort((uint)Settings.Default.sortBy);
-            Everything_SetMatchCase(Settings.Default.isMatchCase);
-            Everything_SetMatchPath(Settings.Default.isMatchPath);
-            Everything_SetMatchWholeWord(Settings.Default.isMatchWholeWord && !Settings.Default.isRegExEnabled);
-            Everything_SetRegex(Settings.Default.isRegExEnabled);
-            Everything_SetMax(BATCH_SIZE);
-            lock (_lock)
-                Everything_SetOffset((uint)SearchResults.Count);
-
-            if (!Everything_QueryW(true))
+            try
             {
-                HandleError((ErrorCode)Everything_GetLastError());
-                return null;
-            }
-
-            var batchResultsCount = Everything_GetNumResults();
-            lock (_lock)
-            {
-                TotalResultsNumber = (int)Everything_GetTotResults();
-                Debug.WriteLine("*-* TotalResultsNumber:" + TotalResultsNumber);
-            }
-
-            if (batchResultsCount == 0)
-            {
-                Debug.WriteLine("*-* No files found");
-                System.Windows.MessageBox.Show("batchResultsCount = " + batchResultsCount);
-                return null;
-            }
-
-            var results = new List<Tuple<StringBuilder, long>>();
-            for (uint i = 0; i < batchResultsCount; i++)
-            {
-                Debug.WriteLine("*-* i:" + i);
-                // cancellationToken.ThrowIfCancellationRequested();
-
-                var highlightedPath = Marshal.PtrToStringUni(Everything_GetResultHighlightedPath(i));
-                var highlightedFileName = Marshal.PtrToStringUni(Everything_GetResultHighlightedFileName(i));
-
-                var isFile = Everything_IsFileResult(i);
-                if (!isFile)
+                // Убедитесь, что директория существует
+                var directory = Path.GetDirectoryName(filePath);
+                if (!Directory.Exists(directory))
                 {
-                    Debug.WriteLine("*-* It is not a file:" + highlightedPath + highlightedFileName);
-                    continue;
+                    Directory.CreateDirectory(directory);
                 }
 
-                var fullPathAndFilename = new StringBuilder(4096);
-                Everything_GetResultFullPathNameW(i, fullPathAndFilename, 4096);
-                Everything_GetResultSize(i, out var fileSize);
-                Everything_GetResultDateModified(i, out var dateModified);
+                // Формирование строк для записи
+                var lines = results.Select(result => $"{result.Item1} {result.Item2}").ToList();
+                File.WriteAllLines(filePath, lines);
+                Debug.WriteLine($"Results written to {filePath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Failed to write results to file: " + ex.Message);
+            }
+        }
 
-                results.Add(new Tuple<StringBuilder, long>(fullPathAndFilename, fileSize));
+        private async Task<List<Tuple<StringBuilder, long>>> GetAllFilesAndSizesByQuery(string query)
+        {
+            var results = new List<Tuple<StringBuilder, long>>();
+
+            try
+            {
+                var append = false;
+                lock (_lock)
+                {
+                    if (!append)
+                        SearchResults.ClearSilent();
+                }
+
+                const uint flags = EVERYTHING_FULL_PATH_AND_FILE_NAME | EVERYTHING_HIGHLIGHTED_PATH |
+                                   EVERYTHING_HIGHLIGHTED_FILE_NAME | EVERYTHING_REQUEST_SIZE |
+                                   EVERYTHING_REQUEST_DATE_MODIFIED;
+
+                // var search = BuildFinalSearchTerm();
+                var search = query;
+
+                Debug.WriteLine("------ search" + search);
+
+                _logger.Debug("Searching: " + search);
+                Everything_SetSearchW(search);
+                Everything_SetRequestFlags(flags);
+                Everything_SetSort((uint)Settings.Default.sortBy);
+                Everything_SetMatchCase(Settings.Default.isMatchCase);
+                Everything_SetMatchPath(Settings.Default.isMatchPath);
+                Everything_SetMatchWholeWord(Settings.Default.isMatchWholeWord && !Settings.Default.isRegExEnabled);
+                Everything_SetRegex(Settings.Default.isRegExEnabled);
+                Everything_SetMax(BATCH_SIZE);
+                lock (_lock)
+                    Everything_SetOffset((uint)SearchResults.Count);
+
+                if (!Everything_QueryW(true))
+                {
+                    HandleError((ErrorCode)Everything_GetLastError());
+                    MessageBox.Show("ERROR !Everything_QueryW" + query);
+                    return results;
+                }
+
+                var batchResultsCount = Everything_GetNumResults();
+                lock (_lock)
+                    TotalResultsNumber = (int)Everything_GetTotResults();
+
+                if (batchResultsCount == 0)
+                {
+                    Debug.WriteLine("*-* No files found");
+                    return results;
+                }
+
+                for (uint i = 0; i < batchResultsCount; i++)
+                {
+                    // cancellationToken.ThrowIfCancellationRequested();
+
+                    var highlightedPath = Marshal.PtrToStringUni(Everything_GetResultHighlightedPath(i));
+                    var highlightedFileName = Marshal.PtrToStringUni(Everything_GetResultHighlightedFileName(i));
+                    var isFile = Everything_IsFileResult(i);
+                    if (!isFile)
+                    {
+                        Debug.WriteLine("*-* It is not a file:" + highlightedPath + highlightedFileName);
+                        continue;
+                    }
+
+                    var fullPathAndFilename = new StringBuilder(4096);
+                    Everything_GetResultFullPathNameW(i, fullPathAndFilename, 4096);
+                    Everything_GetResultSize(i, out var fileSize);
+                    Everything_GetResultDateModified(i, out var dateModified);
+
+                    results.Add(new Tuple<StringBuilder, long>(fullPathAndFilename, fileSize));
+                }
+
+                return results;
+            }
+            catch
+            {
+                Debug.WriteLine("Error");
             }
 
             return results;
         }
 
-        private async Task<uint> GetCount(string term)
+        private async Task<uint> GetDublicates(string term)
         {
             try
             {
@@ -544,7 +604,6 @@ namespace EverythingToolbar
                 Debug.WriteLine("------ search" + search);
 
                 _logger.Debug("Searching: " + search);
-                MessageBox.Show(search);
                 Everything_SetSearchW(search);
                 Everything_SetRequestFlags(flags);
                 Everything_SetSort((uint)Settings.Default.sortBy);
@@ -564,6 +623,36 @@ namespace EverythingToolbar
                 }
 
                 var batchResultsCount = Everything_GetNumResults();
+                lock (_lock)
+                    TotalResultsNumber = (int)Everything_GetTotResults();
+
+
+                for (uint i = 0; i < batchResultsCount; i++)
+                {
+                    // cancellationToken.ThrowIfCancellationRequested();
+
+                    var highlightedPath = Marshal.PtrToStringUni(Everything_GetResultHighlightedPath(i));
+                    var highlightedFileName = Marshal.PtrToStringUni(Everything_GetResultHighlightedFileName(i));
+                    var isFile = Everything_IsFileResult(i);
+                    var fullPathAndFilename = new StringBuilder(4096);
+                    Everything_GetResultFullPathNameW(i, fullPathAndFilename, 4096);
+                    Everything_GetResultSize(i, out var fileSize);
+                    Everything_GetResultDateModified(i, out var dateModified);
+
+                    // lock (_lock)
+                    // {
+                    //     SearchResults.AddSilent(new SearchResult()
+                    //     {
+                    //         HighlightedPath = highlightedPath,
+                    //         HighlightedFileName = highlightedFileName,
+                    //         FullPathAndFileName = fullPathAndFilename.ToString(),
+                    //         IsFile = isFile,
+                    //         DateModified = dateModified,
+                    //         FileSize = fileSize
+                    //     });
+                    // }
+                }
+
                 return batchResultsCount;
             }
             catch

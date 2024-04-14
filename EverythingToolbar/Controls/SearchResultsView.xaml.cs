@@ -467,7 +467,6 @@ namespace EverythingToolbar.Controls
         private async void CheckFolderForDuplicates(object sender, RoutedEventArgs e)
         {
             Debug.WriteLine("Start CheckFolderForDuplicates");
-            MessageBox.Show("Start CheckFolderForDuplicates");
 
             if (SelectedItem == null || !Directory.Exists(SelectedItem.FullPathAndFileName))
                 return;
@@ -483,7 +482,7 @@ namespace EverythingToolbar.Controls
 
 
             // Запуск поиска в Everything
-            await EverythingSearch.Instance.QueryEverythingForDuplicates(folderPath);
+            await EverythingSearch.Instance.QueryEverythingForDuplicates(folderPath, true);
         }
     }
 }
