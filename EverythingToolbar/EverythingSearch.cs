@@ -432,24 +432,21 @@ namespace EverythingToolbar
 
             var allFilesInFolder = await GetAllFilesAndSizesByQuery("\"" + folderPath + "\"", 100000);
             var allFilesInFolderCount = allFilesInFolder.Count;
-            MessageBox.Show("allFilesInFolderCount: " + allFilesInFolderCount);
+            // MessageBox.Show("allFilesInFolderCount: " + allFilesInFolderCount);
             if (allFilesInFolderCount == 0)
             {
                 MessageBox.Show("ERROR allFilesInFolderCount: " + allFilesInFolderCount);
             }
 
-            for (var i = 0; i < allFilesInFolderCount / BATCH_SIZE; i++)
-            {
-                // var allFilesInFolderBatch = await GetAllFilesAndSizesByQuery("\"" + folderPath + "\"");
-                // if (allFilesInFolderBatch == null)
-                // {
-                    // MessageBox.Show("ERROR: allFiles == null " + folderPath);
-                    // return;
-                // }
+            var allFilesPath = folderPath + "\\allFiles.txt";
+            var allFilesLines = allFilesInFolder.Select(d => new Tuple<string, long>(d.Item1.ToString(), d.Item2)).ToList();
+            WriteResultsToFile(allFilesLines, allFilesPath);
 
+            for (var i = 0; i < allFilesInFolderCount / BATCH_SIZE + 1; i++)
+            {
                 for (var j = i * Convert.ToInt32(BATCH_SIZE); j < (i + 1) * BATCH_SIZE; j++)
-                // foreach (var (fullPathAndFilename, fileSize) in allFilesInFolderBatch)
                 {
+                    if (j >= allFilesInFolderCount) break;
                     var fullPathAndFilename = allFilesInFolder[j].Item1;
                     var fileSize = allFilesInFolder[j].Item2;
 
@@ -530,9 +527,9 @@ namespace EverythingToolbar
                     }
                 }
 
-                var duplicateFilePath = @"C:\Aleradev\FilesDeduplicate\duplicates.txt";
-                var uniqueFilePath = @"C:\Aleradev\FilesDeduplicate\unique.txt";
-                var deletedFilePath = @"C:\Aleradev\FilesDeduplicate\deleted.txt";
+                var duplicateFilePath = folderPath + "\\duplicates.txt";
+                var uniqueFilePath = folderPath + "\\unique.txt";
+                var deletedFilePath = folderPath + "\\deleted.txt";
                 // Создание файлов с результатами
                 WriteResultsToFile(duplicatesPaths, duplicateFilePath);
                 WriteResultsToFile(uniquePaths, uniqueFilePath);
